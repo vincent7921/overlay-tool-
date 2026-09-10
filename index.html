@@ -272,9 +272,90 @@
   footer{
     text-align:center; font-size:11px; color:#a39c8a; padding:10px 0 18px;
   }
+  /* ============ Mobile layout (bottom toolbar + pop-up sheet) ============ */
+  .mobile-toolbar, .mobile-sheet{ display:none; }
+
   @media (max-width: 900px){
-    .controls{ width:100%; position:sticky; top:0; }
-    main{ flex-direction:column; }
+    body{ overflow-x:hidden; }
+    #app{ min-height:100dvh; }
+    .controls{ display:none; }
+    main{
+      flex-direction:column;
+      padding:8px 8px 0;
+      gap:8px;
+      height:100dvh;
+      overflow:hidden;
+    }
+    .panel-header{ padding:10px 12px; flex:0 0 auto; }
+    .panel-header h1{ font-size:13.5px; }
+    .panel-header p{ display:none; }
+    .stage-wrap{ flex:1 1 auto; margin:0 auto; }
+
+    /* bottom fixed tool tray: one icon per tool, tap to open/close its sheet */
+    .mobile-toolbar{
+      display:flex;
+      flex:0 0 auto;
+      position:sticky;
+      bottom:0;
+      left:0; right:0;
+      background:#fff;
+      border-top:1px solid var(--line);
+      box-shadow:0 -2px 10px rgba(0,0,0,0.08);
+      z-index:20;
+      padding:4px 2px calc(4px + env(safe-area-inset-bottom));
+    }
+    .mtb-btn{
+      flex:1 1 0;
+      background:none;
+      color:#5c5646;
+      border:none;
+      border-radius:10px;
+      padding:6px 2px;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      gap:2px;
+      font-size:10.5px;
+      -webkit-appearance:none; appearance:none;
+    }
+    .mtb-btn .mtb-icon{ font-size:19px; line-height:1; }
+    .mtb-btn.active{ color:var(--blue); background:#eaf0f8; }
+    .mtb-btn:disabled{ opacity:0.4; }
+
+    /* pop-up panel: sits just above the tool tray, canvas stays visible above it */
+    .mobile-sheet{
+      display:block;
+      position:sticky;
+      bottom:56px;
+      left:0; right:0;
+      max-height:34vh;
+      overflow-y:auto;
+      background:var(--panel);
+      border-radius:16px 16px 0 0;
+      box-shadow:0 -4px 16px rgba(0,0,0,0.12);
+      padding:12px 16px calc(12px + env(safe-area-inset-bottom));
+      z-index:19;
+      flex:0 0 auto;
+    }
+    .mobile-sheet-head{
+      display:flex; justify-content:space-between; align-items:center;
+      margin-bottom:8px;
+    }
+    .mobile-sheet-head b{ font-size:13.5px; color:var(--blue); }
+    .mobile-sheet-head button{
+      background:none; color:#a39c8a; font-size:18px; padding:0 4px;
+      -webkit-appearance:none; appearance:none;
+    }
+
+    /* slightly bigger touch targets for the floating canvas toolbar */
+    .tb-btn{ width:34px; height:34px; font-size:16px; }
+    .tb-btn.wide{ width:auto; padding:0 12px; }
+  }
+
+  /* Interactive drag surfaces must not fight the browser's own touch-scroll
+     gesture, or pointer drags never even start on mobile. */
+  .crop-rect, .crop-handle, .rect-box, .img-wrapper, .compass-layer{
+    touch-action:none;
   }
 </style>
 </head>
@@ -398,6 +479,96 @@
 
     </div>
 
+    <!-- ============ 手機版：底部工具列彈出面板 ============ -->
+    <div class="mobile-sheet" v-if="mobileTool">
+      <div class="mobile-sheet-head">
+        <b>{{ {crop:'裁切格局圖', outline:'房屋外框框選', rotate:'格局圖旋轉', compass:'羅盤疊加'}[mobileTool] }}</b>
+        <button type="button" @click="mobileTool=null">✕</button>
+      </div>
+
+      <template v-if="mobileTool==='crop'">
+        <template v-if="step==='crop'">
+          <p class="hint">拖曳四角控制點調整裁切範圍，或使用自動去白邊。完成後按「確認裁切」。</p>
+          <div class="btn-row">
+            <button @click="autoTrim">自動去除白邊</button>
+            <button class="secondary" @click="resetCropRect">重設範圍</button>
+          </div>
+          <div style="margin-top:12px;" class="btn-row">
+            <button @click="confirmCrop">確認裁切 →</button>
+          </div>
+        </template>
+        <template v-else-if="step==='work'">
+          <p class="hint" style="color:#1e7a3b;">裁切已完成 ✓</p>
+          <div class="btn-row" style="margin-top:8px;">
+            <button class="secondary" @click="recrop" :disabled="locked">重新裁切</button>
+          </div>
+        </template>
+      </template>
+
+      <template v-else-if="mobileTool==='outline'">
+        <p class="hint" v-if="panMode" style="color:#b3452f;">目前為「移動格局圖」模式，請先在畫布左上角關閉移動模式，才能框選九宮格外框。</p>
+        <p class="hint">在畫布上直接<b>點擊並拖曳</b>，框出一個矩形罩住整個房屋外圍，系統會自動切出井字九宮格。框好後仍可拖曳四角或內部微調範圍。</p>
+        <div class="btn-row">
+          <button class="secondary" @click="resetRect" :disabled="locked">重新框選</button>
+        </div>
+        <p class="hint" v-if="!rect.drawn" style="margin-top:8px;">尚未框選外框範圍</p>
+        <p class="hint" v-else style="margin-top:8px; color:#1e7a3b;">外框範圍已框選 ✓</p>
+      </template>
+
+      <template v-else-if="mobileTool==='rotate'">
+        <div class="field">
+          <label>旋轉角度 <b>{{ rotation }}°</b></label>
+          <input type="range" min="0" max="360" step="1" v-model.number="rotation" :disabled="locked">
+        </div>
+        <div class="num-row" style="margin-bottom:10px;">
+          <input type="number" min="0" max="360" step="1" v-model.number="rotation" @change="clampRotation" :disabled="locked" placeholder="輸入角度 0-360">
+        </div>
+        <div class="btn-row">
+          <button class="secondary" @click="rotation=0" :disabled="locked">歸零角度</button>
+        </div>
+        <p class="hint" style="margin-top:8px;" v-if="rotation!==0">提示：外框矩形僅能在角度為 0° 時新增或調整範圍。</p>
+      </template>
+
+      <template v-else-if="mobileTool==='compass'">
+        <div class="field" style="display:flex;align-items:center;justify-content:space-between;">
+          <label style="margin:0;">顯示 / 開啟羅盤</label>
+          <label class="switch">
+            <input type="checkbox" v-model="compassEnabled" @change="onCompassToggle" :disabled="locked">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="field">
+          <label>羅盤縮放 <b>{{ compassScale.toFixed(2) }}x</b></label>
+          <input type="range" min="0.3" max="4" step="0.01" v-model.number="compassScale" :disabled="locked || !compassEnabled">
+        </div>
+        <div class="field">
+          <label>羅盤透明度 <b>{{ Math.round(compassOpacity*100) }}%</b></label>
+          <input type="range" min="0.1" max="1" step="0.01" v-model.number="compassOpacity" :disabled="!compassEnabled">
+        </div>
+        <div class="btn-row">
+          <button class="secondary" @click="compassOffset.x=0;compassOffset.y=0" :disabled="locked || !compassEnabled">羅盤置中</button>
+        </div>
+      </template>
+    </div>
+
+    <div class="mobile-toolbar" v-if="step!=='upload'">
+      <button type="button" class="mtb-btn" :class="{active:mobileTool==='crop'}" @click="toggleMobileTool('crop')">
+        <span class="mtb-icon">✂️</span>裁切
+      </button>
+      <button type="button" class="mtb-btn" :class="{active:mobileTool==='outline'}" :disabled="step!=='work'" @click="toggleMobileTool('outline')">
+        <span class="mtb-icon">▭</span>框選
+      </button>
+      <button type="button" class="mtb-btn" :class="{active:mobileTool==='rotate'}" :disabled="step!=='work' || !rect.drawn" @click="toggleMobileTool('rotate')">
+        <span class="mtb-icon">🔄</span>旋轉
+      </button>
+      <button type="button" class="mtb-btn" :class="{active:mobileTool==='compass'}" :disabled="step!=='work' || !rect.drawn" @click="toggleMobileTool('compass')">
+        <span class="mtb-icon">🧭</span>羅盤
+      </button>
+      <button type="button" class="mtb-btn" :disabled="step!=='work' || !rect.drawn" @click="exportComposite">
+        <span class="mtb-icon">⬇</span>匯出
+      </button>
+    </div>
+
     <!-- ============ 主工作區 ============ -->
     <div class="stage-wrap" :style="{width:stageW+'px', height:stageH+'px'}">
       <div class="stage" ref="stageEl">
@@ -416,11 +587,11 @@
         <template v-if="step==='crop'">
           <div class="raw-wrapper" :style="rawWrapperStyle" ref="rawWrapperEl">
             <img :src="rawSrc">
-            <div class="crop-rect" :style="cropRectStyle" @mousedown="startCropDrag('move',$event)">
-              <div class="crop-handle nw" @mousedown.stop="startCropDrag('nw',$event)"></div>
-              <div class="crop-handle ne" @mousedown.stop="startCropDrag('ne',$event)"></div>
-              <div class="crop-handle sw" @mousedown.stop="startCropDrag('sw',$event)"></div>
-              <div class="crop-handle se" @mousedown.stop="startCropDrag('se',$event)"></div>
+            <div class="crop-rect" :style="cropRectStyle" @pointerdown="startCropDrag('move',$event)">
+              <div class="crop-handle nw" @pointerdown.stop="startCropDrag('nw',$event)"></div>
+              <div class="crop-handle ne" @pointerdown.stop="startCropDrag('ne',$event)"></div>
+              <div class="crop-handle sw" @pointerdown.stop="startCropDrag('sw',$event)"></div>
+              <div class="crop-handle se" @pointerdown.stop="startCropDrag('se',$event)"></div>
             </div>
           </div>
         </template>
@@ -448,7 +619,7 @@
           <div class="angle-badge">旋轉角度：{{ rotation }}°</div>
 
           <div class="img-wrapper" :class="{'pan-cursor':panMode && !locked}" :style="wrapperStyle" ref="imgWrapperEl"
-               @mousedown="onWrapperMouseDown">
+               @pointerdown="onWrapperMouseDown">
             <img :src="houseSrc">
             <svg class="overlay-svg"
                  :width="naturalW*finalScale" :height="naturalH*finalScale"
@@ -463,19 +634,19 @@
             </svg>
 
             <template v-if="rect.drawn">
-              <div class="rect-box" :style="rectBoxStyle" @mousedown="onRectAreaMouseDown('move',$event)">
+              <div class="rect-box" :style="rectBoxStyle" @pointerdown="onRectAreaMouseDown('move',$event)">
                 <template v-if="!panMode">
-                  <div class="crop-handle nw" @mousedown.stop="onRectAreaMouseDown('nw',$event)"></div>
-                  <div class="crop-handle ne" @mousedown.stop="onRectAreaMouseDown('ne',$event)"></div>
-                  <div class="crop-handle sw" @mousedown.stop="onRectAreaMouseDown('sw',$event)"></div>
-                  <div class="crop-handle se" @mousedown.stop="onRectAreaMouseDown('se',$event)"></div>
+                  <div class="crop-handle nw" @pointerdown.stop="onRectAreaMouseDown('nw',$event)"></div>
+                  <div class="crop-handle ne" @pointerdown.stop="onRectAreaMouseDown('ne',$event)"></div>
+                  <div class="crop-handle sw" @pointerdown.stop="onRectAreaMouseDown('sw',$event)"></div>
+                  <div class="crop-handle se" @pointerdown.stop="onRectAreaMouseDown('se',$event)"></div>
                 </template>
               </div>
             </template>
           </div>
 
           <div class="compass-layer" v-if="compassEnabled" :class="{locked:locked}" :style="compassStyle"
-               @mousedown="startCompassDrag">
+               @pointerdown="startCompassDrag">
             <img :src="compassSrc" draggable="false">
           </div>
 
@@ -525,15 +696,38 @@ createApp({
       activeSection.value = (activeSection.value === name) ? null : name;
     }
 
+    // Mobile-only: which tool's pop-up sheet is currently open (null = none,
+    // canvas fully visible). Kept separate from activeSection so desktop's
+    // accordion and the mobile sheet don't fight over the same toggle state.
+    const mobileTool = ref(null);
+    function toggleMobileTool(name){
+      mobileTool.value = (mobileTool.value === name) ? null : name;
+    }
+
     // Stage fills whatever space is actually available in the viewport
     // (minus the side control panel), so it's always as big as possible
     // with no page scrollbars.
     const stageW = ref(900), stageH = ref(700);
     function computeStageSize(){
-      const sidePanel = 332, outerGap = 60;
-      const headerFooter = 90;
-      stageW.value = Math.max(320, window.innerWidth - sidePanel - outerGap);
-      stageH.value = Math.max(320, window.innerHeight - headerFooter);
+      const isMobile = window.matchMedia('(max-width: 900px)').matches;
+      if(isMobile){
+        // Mobile: canvas is stacked full-width, with a fixed header above and
+        // a fixed bottom tool tray (plus its pop-up sheet, when open) below.
+        const header = document.querySelector('.panel-header');
+        const toolbar = document.querySelector('.mobile-toolbar');
+        const sheet = document.querySelector('.mobile-sheet');
+        const headerH = header ? header.offsetHeight : 60;
+        const toolbarH = toolbar ? toolbar.offsetHeight : 0;
+        const sheetH = sheet ? sheet.offsetHeight : 0;
+        const gaps = 24; // padding/gaps in main's flex column
+        stageW.value = Math.max(280, window.innerWidth - 16);
+        stageH.value = Math.max(280, window.innerHeight - headerH - toolbarH - sheetH - gaps);
+      } else {
+        const sidePanel = 332, outerGap = 60;
+        const headerFooter = 90;
+        stageW.value = Math.max(320, window.innerWidth - sidePanel - outerGap);
+        stageH.value = Math.max(320, window.innerHeight - headerFooter);
+      }
     }
 
     // -------- raw upload / crop state --------
@@ -632,10 +826,11 @@ createApp({
     // generic drag handling for crop handles
     let cropDrag = null;
     function startCropDrag(handle, evt){
+      evt.preventDefault();
       const local = localFromEvent(evt, rawWrapperEl, rawDisplayScale.value);
       cropDrag = { handle, startLocal: local, start: {x:cropRect.x, y:cropRect.y, w:cropRect.w, h:cropRect.h} };
-      window.addEventListener('mousemove', onCropDragMove);
-      window.addEventListener('mouseup', endCropDrag);
+      window.addEventListener('pointermove', onCropDragMove);
+      window.addEventListener('pointerup', endCropDrag);
     }
     function onCropDragMove(evt){
       if(!cropDrag) return;
@@ -664,8 +859,8 @@ createApp({
     }
     function endCropDrag(){
       cropDrag = null;
-      window.removeEventListener('mousemove', onCropDragMove);
-      window.removeEventListener('mouseup', endCropDrag);
+      window.removeEventListener('pointermove', onCropDragMove);
+      window.removeEventListener('pointerup', endCropDrag);
     }
 
     async function confirmCrop(){
@@ -798,9 +993,10 @@ createApp({
     let housePanDrag = null;
     function startHousePanDrag(evt){
       if(locked.value) return;
+      evt.preventDefault();
       housePanDrag = { startX:evt.clientX, startY:evt.clientY, start:{x:housePan.x, y:housePan.y} };
-      window.addEventListener('mousemove', onHousePanDragMove);
-      window.addEventListener('mouseup', endHousePanDrag);
+      window.addEventListener('pointermove', onHousePanDragMove);
+      window.addEventListener('pointerup', endHousePanDrag);
     }
     function onHousePanDragMove(evt){
       if(!housePanDrag) return;
@@ -809,20 +1005,21 @@ createApp({
     }
     function endHousePanDrag(){
       housePanDrag = null;
-      window.removeEventListener('mousemove', onHousePanDragMove);
-      window.removeEventListener('mouseup', endHousePanDrag);
+      window.removeEventListener('pointermove', onHousePanDragMove);
+      window.removeEventListener('pointerup', endHousePanDrag);
     }
 
     // ---- draw a brand new outline rectangle by click-drag ----
     let newRectDrag = null;
     function startNewRectDrag(evt){
       if(locked.value || rotation.value !== 0 || rect.drawn) return;
+      evt.preventDefault();
       const s = finalScale.value;
       const local = localFromEvent(evt, imgWrapperEl, s);
       newRectDrag = { start: local };
       rect.x = local.x; rect.y = local.y; rect.w = 0; rect.h = 0;
-      window.addEventListener('mousemove', onNewRectDragMove);
-      window.addEventListener('mouseup', endNewRectDrag);
+      window.addEventListener('pointermove', onNewRectDragMove);
+      window.addEventListener('pointerup', endNewRectDrag);
     }
     function onNewRectDragMove(evt){
       if(!newRectDrag) return;
@@ -844,8 +1041,8 @@ createApp({
         }
       }
       newRectDrag = null;
-      window.removeEventListener('mousemove', onNewRectDragMove);
-      window.removeEventListener('mouseup', endNewRectDrag);
+      window.removeEventListener('pointermove', onNewRectDragMove);
+      window.removeEventListener('pointerup', endNewRectDrag);
     }
 
     // ---- adjust an existing outline rectangle (move / resize handles) ----
@@ -860,11 +1057,12 @@ createApp({
     }
     function startRectAdjustDrag(handle, evt){
       if(locked.value || rotation.value !== 0) return;
+      evt.preventDefault();
       const s = finalScale.value;
       const local = localFromEvent(evt, imgWrapperEl, s);
       rectDrag = { handle, startLocal: local, start: {x:rect.x,y:rect.y,w:rect.w,h:rect.h} };
-      window.addEventListener('mousemove', onRectAdjustMove);
-      window.addEventListener('mouseup', endRectAdjustDrag);
+      window.addEventListener('pointermove', onRectAdjustMove);
+      window.addEventListener('pointerup', endRectAdjustDrag);
     }
     function onRectAdjustMove(evt){
       if(!rectDrag) return;
@@ -894,8 +1092,8 @@ createApp({
     }
     function endRectAdjustDrag(){
       rectDrag = null;
-      window.removeEventListener('mousemove', onRectAdjustMove);
-      window.removeEventListener('mouseup', endRectAdjustDrag);
+      window.removeEventListener('pointermove', onRectAdjustMove);
+      window.removeEventListener('pointerup', endRectAdjustDrag);
     }
 
     function resetRect(){ rect.drawn=false; rect.x=0; rect.y=0; rect.w=0; rect.h=0; compassEnabled.value=false; }
@@ -929,9 +1127,10 @@ createApp({
     let compassDrag = null;
     function startCompassDrag(evt){
       if(locked.value) return;
+      evt.preventDefault();
       compassDrag = { startX:evt.clientX, startY:evt.clientY, startOffset:{x:compassOffset.x, y:compassOffset.y} };
-      window.addEventListener('mousemove', onCompassDragMove);
-      window.addEventListener('mouseup', endCompassDrag);
+      window.addEventListener('pointermove', onCompassDragMove);
+      window.addEventListener('pointerup', endCompassDrag);
     }
     function onCompassDragMove(evt){
       if(!compassDrag) return;
@@ -940,8 +1139,8 @@ createApp({
     }
     function endCompassDrag(){
       compassDrag = null;
-      window.removeEventListener('mousemove', onCompassDragMove);
-      window.removeEventListener('mouseup', endCompassDrag);
+      window.removeEventListener('pointermove', onCompassDragMove);
+      window.removeEventListener('pointerup', endCompassDrag);
     }
 
     // -------- export --------
@@ -1006,17 +1205,26 @@ createApp({
       rotation.value = clamp(v, 0, 360);
     }
 
-    watch(step, (v) => { if(v === 'work') activeSection.value = 'outline'; });
-    watch(() => rect.drawn, (v) => { if(v) activeSection.value = 'rotate'; });
+    watch(step, (v) => {
+      if(v === 'work'){ activeSection.value = 'outline'; mobileTool.value = 'outline'; }
+    });
+    watch(() => rect.drawn, (v) => {
+      if(v){ activeSection.value = 'rotate'; mobileTool.value = 'rotate'; }
+    });
+    // Opening/closing the mobile sheet changes how much vertical space the
+    // canvas actually has, so the stage must resize along with it.
+    watch(mobileTool, () => { nextTick(computeStageSize); });
 
     onMounted(async () => {
       computeStageSize();
+      nextTick(computeStageSize);
       window.addEventListener('resize', computeStageSize);
+      window.addEventListener('orientationchange', () => nextTick(computeStageSize));
       compassImgEl.value = await loadImageEl(COMPASS_DATA_URI);
     });
 
     return {
-      step, stageW, stageH, activeSection, toggleSection, rawSrc, rawWrapperStyle, cropRectStyle, rawWrapperEl, stageEl,
+      step, stageW, stageH, activeSection, toggleSection, mobileTool, toggleMobileTool, rawSrc, rawWrapperStyle, cropRectStyle, rawWrapperEl, stageEl,
       onFileChange, autoTrim, resetCropRect, startCropDrag, confirmCrop, recrop, restartAll,
       houseSrc, naturalW, naturalH, rect, hasRect, rotation, clampRotation, locked, houseZoom, housePan, panMode, zoomIn, zoomOut, resetZoomPan, imgWrapperEl,
       displayScale, finalScale, centerPoint, gridSegments, wrapperStyle, rectBoxStyle,
