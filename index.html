@@ -257,7 +257,7 @@
   .tb-btn:disabled{opacity:0.4;}
   .tb-val{font-size:11.5px; min-width:38px; text-align:center; color:#4a4436; font-variant-numeric:tabular-nums;}
   .angle-badge{
-    position:absolute; top:10px; right:10px; background:rgba(30,42,56,0.82); color:#fff;
+    top:10px; right:10px; background:rgba(30,42,56,0.82); color:#fff;
     padding:4px 10px; border-radius:20px; font-size:12px; font-variant-numeric:tabular-nums; z-index:5;
   }
   .lock-badge{
@@ -373,7 +373,7 @@
 
       <div class="acc-card">
         <button type="button" class="acc-header" :class="{active:activeSection==='crop'}" @click="toggleSection('crop')">
-          <span class="acc-label">一、裁切格局圖</span><span class="chev">{{ activeSection==='crop' ? '−' : '+' }}</span>
+          <span class="acc-label">一、裁切</span><span class="chev">{{ activeSection==='crop' ? '−' : '+' }}</span>
         </button>
         <fieldset v-show="activeSection==='crop'" :disabled="step==='upload'">
           <template v-if="step==='crop'">
@@ -398,7 +398,7 @@
 
       <div class="acc-card">
         <button type="button" class="acc-header" :class="{active:activeSection==='outline'}" @click="toggleSection('outline')">
-          <span class="acc-label">二、房屋外框框選</span><span class="chev">{{ activeSection==='outline' ? '−' : '+' }}</span>
+          <span class="acc-label">二、九宮框選</span><span class="chev">{{ activeSection==='outline' ? '−' : '+' }}</span>
         </button>
         <fieldset v-show="activeSection==='outline'" :disabled="step!=='work'">
           <p class="hint" v-if="panMode" style="color:#b3452f;">目前為「移動格局圖」模式，請先到畫布左上角關閉移動模式，才能框選九宮格外框。</p>
@@ -413,7 +413,7 @@
 
       <div class="acc-card">
         <button type="button" class="acc-header" :class="{active:activeSection==='rotate'}" @click="toggleSection('rotate')">
-          <span class="acc-label">三、格局圖旋轉</span><span class="chev">{{ activeSection==='rotate' ? '−' : '+' }}</span>
+          <span class="acc-label">三、旋轉定向</span><span class="chev">{{ activeSection==='rotate' ? '−' : '+' }}</span>
         </button>
         <fieldset v-show="activeSection==='rotate'" :disabled="step!=='work' || !rect.drawn">
           <div class="field">
@@ -436,7 +436,7 @@
         </button>
         <fieldset v-show="activeSection==='compass'" :disabled="step!=='work' || !rect.drawn">
           <div class="field" style="display:flex;align-items:center;justify-content:space-between;">
-            <label style="margin:0;">顯示 / 開啟羅盤</label>
+            <label style="margin:0;">開啟 / 關閉羅盤</label>
             <label class="switch">
               <input type="checkbox" v-model="compassEnabled" @change="onCompassToggle" :disabled="locked">
               <span class="slider"></span>
@@ -481,7 +481,7 @@
     <!-- ============ 手機版：底部工具列彈出面板 ============ -->
     <div class="mobile-sheet" v-if="mobileTool" :style="{bottom: mobileToolbarH+'px'}">
       <div class="mobile-sheet-head">
-        <b>{{ {crop:'裁切格局圖', outline:'房屋外框框選', rotate:'格局圖旋轉', compass:'羅盤疊加'}[mobileTool] }}</b>
+        <b>{{ {crop:'裁切格局圖', outline:'房屋外框框選', rotate:'格局圖旋轉定向', compass:'羅盤疊加'}[mobileTool] }}</b>
         <button type="button" @click="mobileTool=null">✕</button>
       </div>
 
@@ -551,11 +551,11 @@
     </div>
 
     <div class="mobile-toolbar" v-if="step!=='upload'">
-      <button type="button" class="mtb-btn" :class="{active:mobileTool==='crop'}" @click="toggleMobileTool('crop')">裁切</button>
-      <button type="button" class="mtb-btn" :class="{active:mobileTool==='outline'}" :disabled="step!=='work'" @click="toggleMobileTool('outline')">框選</button>
-      <button type="button" class="mtb-btn" :class="{active:mobileTool==='rotate'}" :disabled="step!=='work' || !rect.drawn" @click="toggleMobileTool('rotate')">旋轉</button>
-      <button type="button" class="mtb-btn" :class="{active:mobileTool==='compass'}" :disabled="step!=='work' || !rect.drawn" @click="toggleMobileTool('compass')">羅盤</button>
-      <button type="button" class="mtb-btn" :disabled="step!=='work' || !rect.drawn" @click="exportComposite">匯出</button>
+      <button type="button" class="mtb-btn" :class="{active:mobileTool==='crop'}" @click="toggleMobileTool('crop')">1.裁切</button>
+      <button type="button" class="mtb-btn" :class="{active:mobileTool==='outline'}" :disabled="step!=='work'" @click="toggleMobileTool('outline')">2.九宮</button>
+      <button type="button" class="mtb-btn" :class="{active:mobileTool==='rotate'}" :disabled="step!=='work' || !rect.drawn" @click="toggleMobileTool('rotate')">3.定向</button>
+      <button type="button" class="mtb-btn" :class="{active:mobileTool==='compass'}" :disabled="step!=='work' || !rect.drawn" @click="toggleMobileTool('compass')">4.羅盤</button>
+      <button type="button" class="mtb-btn" :disabled="step!=='work' || !rect.drawn" @click="exportComposite">5.匯出</button>
     </div>
 
     <!-- ============ 主工作區 ============ -->
@@ -604,8 +604,11 @@
                 {{ locked ? '🔒 已鎖定' : '🔓 鎖定' }}
               </button>
             </div>
+            <div class="tb-group">
+                <div class="angle-badge">旋轉角度：{{ rotation }}°</div>
+            </div>
           </div>
-          <div class="angle-badge">旋轉角度：{{ rotation }}°</div>
+          
 
           <div class="img-wrapper" :class="{'pan-cursor':panMode && !locked}" :style="wrapperStyle" ref="imgWrapperEl"
                @pointerdown="onWrapperMouseDown">
