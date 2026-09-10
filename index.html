@@ -272,7 +272,9 @@
   footer{
     text-align:center; font-size:11px; color:#a39c8a; padding:10px 0 18px;
   }
-  /* ============ Mobile layout (bottom toolbar + pop-up sheet) ============ */
+  /* ============ Mobile layout (bottom toolbar + pop-up sheet, both float
+     ON TOP of the canvas as fixed overlays so the canvas itself never
+     resizes or shifts when a sheet opens/closes) ============ */
   .mobile-toolbar, .mobile-sheet{ display:none; }
 
   @media (max-width: 900px){
@@ -291,51 +293,48 @@
     .panel-header p{ display:none; }
     .stage-wrap{ flex:1 1 auto; margin:0 auto; }
 
-    /* bottom fixed tool tray: one icon per tool, tap to open/close its sheet */
+    /* fixed bottom tool tray, floats over the canvas -- plain text buttons,
+       all in one consistent style (no mixed-style icons) */
     .mobile-toolbar{
       display:flex;
-      flex:0 0 auto;
-      position:sticky;
+      position:fixed;
       bottom:0;
       left:0; right:0;
       background:#fff;
       border-top:1px solid var(--line);
-      box-shadow:0 -2px 10px rgba(0,0,0,0.08);
+      box-shadow:0 -2px 10px rgba(0,0,0,0.1);
       z-index:20;
-      padding:4px 2px calc(4px + env(safe-area-inset-bottom));
+      padding:2px 2px calc(2px + env(safe-area-inset-bottom));
     }
     .mtb-btn{
       flex:1 1 0;
       background:none;
       color:#5c5646;
       border:none;
-      border-radius:10px;
-      padding:6px 2px;
-      display:flex;
-      flex-direction:column;
-      align-items:center;
-      gap:2px;
-      font-size:10.5px;
+      border-left:1px solid var(--line);
+      border-radius:0;
+      padding:13px 2px;
+      font-size:13px;
+      font-weight:700;
       -webkit-appearance:none; appearance:none;
     }
-    .mtb-btn .mtb-icon{ font-size:19px; line-height:1; }
-    .mtb-btn.active{ color:var(--blue); background:#eaf0f8; }
+    .mtb-btn:first-child{ border-left:none; }
+    .mtb-btn.active{ background:var(--blue); color:#fff; }
     .mtb-btn:disabled{ opacity:0.4; }
 
-    /* pop-up panel: sits just above the tool tray, canvas stays visible above it */
+    /* pop-up panel floats above the tool tray, on top of the canvas, without
+       pushing or resizing it -- kept short so most of the canvas stays visible */
     .mobile-sheet{
       display:block;
-      position:sticky;
-      bottom:56px;
+      position:fixed;
       left:0; right:0;
-      max-height:34vh;
+      max-height:30vh;
       overflow-y:auto;
       background:var(--panel);
       border-radius:16px 16px 0 0;
-      box-shadow:0 -4px 16px rgba(0,0,0,0.12);
+      box-shadow:0 -4px 16px rgba(0,0,0,0.16);
       padding:12px 16px calc(12px + env(safe-area-inset-bottom));
       z-index:19;
-      flex:0 0 auto;
     }
     .mobile-sheet-head{
       display:flex; justify-content:space-between; align-items:center;
@@ -480,7 +479,7 @@
     </div>
 
     <!-- ============ 手機版：底部工具列彈出面板 ============ -->
-    <div class="mobile-sheet" v-if="mobileTool">
+    <div class="mobile-sheet" v-if="mobileTool" :style="{bottom: mobileToolbarH+'px'}">
       <div class="mobile-sheet-head">
         <b>{{ {crop:'裁切格局圖', outline:'房屋外框框選', rotate:'格局圖旋轉', compass:'羅盤疊加'}[mobileTool] }}</b>
         <button type="button" @click="mobileTool=null">✕</button>
@@ -552,21 +551,11 @@
     </div>
 
     <div class="mobile-toolbar" v-if="step!=='upload'">
-      <button type="button" class="mtb-btn" :class="{active:mobileTool==='crop'}" @click="toggleMobileTool('crop')">
-        <span class="mtb-icon">✂️</span>裁切
-      </button>
-      <button type="button" class="mtb-btn" :class="{active:mobileTool==='outline'}" :disabled="step!=='work'" @click="toggleMobileTool('outline')">
-        <span class="mtb-icon">▭</span>框選
-      </button>
-      <button type="button" class="mtb-btn" :class="{active:mobileTool==='rotate'}" :disabled="step!=='work' || !rect.drawn" @click="toggleMobileTool('rotate')">
-        <span class="mtb-icon">🔄</span>旋轉
-      </button>
-      <button type="button" class="mtb-btn" :class="{active:mobileTool==='compass'}" :disabled="step!=='work' || !rect.drawn" @click="toggleMobileTool('compass')">
-        <span class="mtb-icon">🧭</span>羅盤
-      </button>
-      <button type="button" class="mtb-btn" :disabled="step!=='work' || !rect.drawn" @click="exportComposite">
-        <span class="mtb-icon">⬇</span>匯出
-      </button>
+      <button type="button" class="mtb-btn" :class="{active:mobileTool==='crop'}" @click="toggleMobileTool('crop')">裁切</button>
+      <button type="button" class="mtb-btn" :class="{active:mobileTool==='outline'}" :disabled="step!=='work'" @click="toggleMobileTool('outline')">框選</button>
+      <button type="button" class="mtb-btn" :class="{active:mobileTool==='rotate'}" :disabled="step!=='work' || !rect.drawn" @click="toggleMobileTool('rotate')">旋轉</button>
+      <button type="button" class="mtb-btn" :class="{active:mobileTool==='compass'}" :disabled="step!=='work' || !rect.drawn" @click="toggleMobileTool('compass')">羅盤</button>
+      <button type="button" class="mtb-btn" :disabled="step!=='work' || !rect.drawn" @click="exportComposite">匯出</button>
     </div>
 
     <!-- ============ 主工作區 ============ -->
@@ -708,20 +697,26 @@ createApp({
     // (minus the side control panel), so it's always as big as possible
     // with no page scrollbars.
     const stageW = ref(900), stageH = ref(700);
+    // Height of the fixed bottom tool tray on mobile, measured live so the
+    // pop-up sheet can sit exactly on top of it. The sheet itself is a
+    // floating overlay and must NEVER factor into the canvas size below --
+    // opening/closing it should not move or resize the canvas at all.
+    const mobileToolbarH = ref(50);
     function computeStageSize(){
       const isMobile = window.matchMedia('(max-width: 900px)').matches;
       if(isMobile){
         // Mobile: canvas is stacked full-width, with a fixed header above and
-        // a fixed bottom tool tray (plus its pop-up sheet, when open) below.
+        // a fixed bottom tool tray below. Both the tray and its pop-up sheet
+        // float ON TOP of the canvas (position:fixed), so only the header
+        // and the tray -- never the sheet -- ever affect the canvas box.
         const header = document.querySelector('.panel-header');
         const toolbar = document.querySelector('.mobile-toolbar');
-        const sheet = document.querySelector('.mobile-sheet');
         const headerH = header ? header.offsetHeight : 60;
-        const toolbarH = toolbar ? toolbar.offsetHeight : 0;
-        const sheetH = sheet ? sheet.offsetHeight : 0;
-        const gaps = 24; // padding/gaps in main's flex column
+        const toolbarH = toolbar ? toolbar.offsetHeight : 50;
+        mobileToolbarH.value = toolbarH;
+        const gaps = 16; // padding/gaps in main's flex column
         stageW.value = Math.max(280, window.innerWidth - 16);
-        stageH.value = Math.max(280, window.innerHeight - headerH - toolbarH - sheetH - gaps);
+        stageH.value = Math.max(280, window.innerHeight - headerH - toolbarH - gaps);
       } else {
         const sidePanel = 332, outerGap = 60;
         const headerFooter = 90;
@@ -1211,9 +1206,6 @@ createApp({
     watch(() => rect.drawn, (v) => {
       if(v){ activeSection.value = 'rotate'; mobileTool.value = 'rotate'; }
     });
-    // Opening/closing the mobile sheet changes how much vertical space the
-    // canvas actually has, so the stage must resize along with it.
-    watch(mobileTool, () => { nextTick(computeStageSize); });
 
     onMounted(async () => {
       computeStageSize();
@@ -1224,7 +1216,7 @@ createApp({
     });
 
     return {
-      step, stageW, stageH, activeSection, toggleSection, mobileTool, toggleMobileTool, rawSrc, rawWrapperStyle, cropRectStyle, rawWrapperEl, stageEl,
+      step, stageW, stageH, mobileToolbarH, activeSection, toggleSection, mobileTool, toggleMobileTool, rawSrc, rawWrapperStyle, cropRectStyle, rawWrapperEl, stageEl,
       onFileChange, autoTrim, resetCropRect, startCropDrag, confirmCrop, recrop, restartAll,
       houseSrc, naturalW, naturalH, rect, hasRect, rotation, clampRotation, locked, houseZoom, housePan, panMode, zoomIn, zoomOut, resetZoomPan, imgWrapperEl,
       displayScale, finalScale, centerPoint, gridSegments, wrapperStyle, rectBoxStyle,
