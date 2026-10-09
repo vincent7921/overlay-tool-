@@ -21,8 +21,9 @@
     font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;
     background:var(--paper);
     color:var(--ink);
+    overflow:hidden;
   }
-  #app{min-height:100vh; display:flex; flex-direction:column;}
+  #app{min-height:0; display:block;}
   .panel-header{
     background:linear-gradient(135deg,#1e2a38,#2c3e54);
     color:#f6f3ec;
@@ -32,15 +33,7 @@
   .panel-header h1{font-size:15px; margin:0 0 4px; letter-spacing:0.5px;}
   .panel-header p{margin:0 0 10px; font-size:11.5px; opacity:0.75; line-height:1.5;}
   .panel-header button{width:100%;}
-  main{
-    flex:1;
-    display:flex;
-    gap:20px;
-    padding:20px;
-    align-items:flex-start;
-    flex-wrap:wrap;
-    justify-content:center;
-  }
+  main{ display:block; padding:0; margin:0; }
   .panel{
     background:var(--panel);
     border-radius:14px;
@@ -53,10 +46,11 @@
     display:flex;
     flex-direction:column;
     gap:10px;
-    position:sticky;
-    top:20px;
-    align-self:flex-start;
-    max-height:calc(100vh - 40px);
+    /* 畫布全版面：控制面板浮在畫布左上方 */
+    position:fixed;
+    left:12px; top:12px;
+    z-index:10;
+    max-height:calc(100vh - 24px);
     overflow-y:auto;
   }
   .acc-card{
@@ -183,9 +177,11 @@
     width:100%; padding:6px 8px; border:1px solid var(--line); border-radius:6px; font-size:12.5px;
   }
   .stage-wrap{
-    position:relative;
-    border-radius:14px;
-    overflow:auto;
+    position:fixed;
+    left:0; top:0;
+    z-index:1;
+    border-radius:0;
+    overflow:hidden;
   }
   .stage{
     position:relative;
@@ -196,8 +192,8 @@
       linear-gradient(90deg, transparent 24px, rgba(0,0,0,0.03) 25px);
     background-size:25px 25px;
     background-color:#fdfcf8;
-    border:1px dashed #cfc8b6;
-    border-radius:14px;
+    border:none;
+    border-radius:0;
     user-select:none;
     overflow:visible;
   }
@@ -239,6 +235,11 @@
   }
   .compass-layer.locked{cursor:default;}
   .compass-layer img{width:100%; height:100%; display:block; pointer-events:none; -webkit-user-drag:none;}
+  @media (min-width: 901px){
+    .canvas-toolbar{ left:336px !important; }
+    .map-ui, .map-bottom{ left:336px !important; }
+    .leaflet-top.leaflet-left{ margin-left:324px; }
+  }
   .canvas-toolbar{
     position:absolute; top:10px; left:10px; z-index:6;
     display:flex; gap:8px; flex-wrap:wrap;
@@ -281,19 +282,11 @@
 
   @media (max-width: 900px){
     body{ overflow-x:hidden; }
-    #app{ min-height:100dvh; }
     .controls{ display:none; }
-    main{
-      flex-direction:column;
-      padding:8px 8px 0;
-      gap:8px;
-      height:100dvh;
-      overflow:hidden;
-    }
+    main{ display:block; padding:0; height:0; overflow:visible; }
     .panel-header{ padding:10px 12px; flex:0 0 auto; }
     .panel-header h1{ font-size:13.5px; }
     .panel-header p{ display:none; }
-    .stage-wrap{ flex:1 1 auto; margin:0 auto; }
 
     /* fixed bottom tool tray, floats over the canvas -- plain text buttons,
        all in one consistent style (no mixed-style icons) */
@@ -375,6 +368,8 @@
   .arrow-svg{position:absolute; top:0; left:0; pointer-events:none; overflow:visible;}
   .arrow-svg .arrow-hit{pointer-events:stroke; cursor:pointer; touch-action:none;}
   .arrow-svg circle{pointer-events:all; cursor:grab; touch-action:none;}
+  .arrow-svg .arrow-del{pointer-events:all; cursor:pointer; touch-action:none;}
+  .arrow-svg .arrow-del circle, .arrow-svg .arrow-del path{pointer-events:all; cursor:pointer;}
   .arrow-svg text{pointer-events:none; user-select:none;}
   .sub-box + .sub-box{border-top:1px solid var(--line); margin-top:14px; padding-top:12px;}
   .sub-title{display:block; font-size:13px; font-weight:700; color:var(--blue); margin-bottom:4px;}
@@ -558,9 +553,8 @@
         </button>
         <fieldset v-show="activeSection==='crop'" :disabled="step==='upload'">
           <template v-if="step==='crop'">
-            <p class="hint">拖曳四角控制點調整裁切範圍，或使用自動去白邊。完成後按「確認裁切」。</p>
+            <p class="hint">拖曳四角控制點調整裁切範圍。完成後按「確認裁切」。</p>
             <div class="btn-row">
-              <button @click="autoTrim">自動去除白邊</button>
               <button class="secondary" @click="resetCropRect">重設範圍</button>
             </div>
             <div style="margin-top:12px;" class="btn-row">
@@ -721,17 +715,19 @@
     </div>
 
     <!-- ============ 手機版：底部工具列彈出面板 ============ -->
-    <div class="mobile-sheet" v-if="mobileTool" :style="{bottom: mobileToolbarH+'px'}">
+    <div class="mobile-sheet" v-if="mobileTool && step!=='upload'" :style="{bottom: mobileToolbarH+'px'}">
       <div class="mobile-sheet-head">
         <b>{{ {crop:'裁切格局圖', outline:'繪製參考線', rotate:'格局圖旋轉定向', compass:'羅盤疊加', fengshui:'紫白飛星設定', declination:'磁偏角設定'}[mobileTool] }}</b>
         <button type="button" @click="mobileTool=null">✕</button>
       </div>
 
       <template v-if="mobileTool==='crop'">
+        <div class="btn-row" style="margin-bottom:10px;">
+          <button class="secondary" @click="restartAll" v-if="step!=='upload'">重新上傳</button>
+        </div>
         <template v-if="step==='crop'">
-          <p class="hint">拖曳四角控制點調整裁切範圍，或使用自動去白邊。完成後按「確認裁切」。</p>
+          <p class="hint">拖曳四角控制點調整裁切範圍。完成後按「確認裁切」。</p>
           <div class="btn-row">
-            <button @click="autoTrim">自動去除白邊</button>
             <button class="secondary" @click="resetCropRect">重設範圍</button>
           </div>
           <div style="margin-top:12px;" class="btn-row">
@@ -866,7 +862,7 @@
     </div>
 
     <!-- ============ 主工作區 ============ -->
-    <div class="stage-wrap" :style="{width:stageW+'px', height:stageH+'px'}">
+    <div class="stage-wrap" :style="{width:stageW+'px', height:stageH+'px'}" @pointerdown.capture="onStagePointerDown">
       <div class="stage" ref="stageEl">
 
         <!-- 空狀態：上傳 -->
@@ -985,7 +981,11 @@
               <g v-for="(a,i) in arrowViews" :key="'a'+i">
                 <line :x1="a.x1" :y1="a.y1" :x2="a.x2" :y2="a.y2" :stroke="a.color" :stroke-width="selectedArrow===i ? 2.2 : 1.5" :marker-end="'url(#arrowhead'+i+')'"/>
                 <line class="arrow-hit" :x1="a.x1" :y1="a.y1" :x2="a.x2" :y2="a.y2" stroke="transparent" stroke-width="18" @pointerdown.stop="selectedArrow=i"/>
-                <text :x="a.lx" :y="a.ly" text-anchor="middle" dominant-baseline="middle" font-size="13" font-weight="700" :fill="a.color" stroke="#fff" stroke-width="3" paint-order="stroke" :transform="'rotate('+(-rotation)+' '+a.lx+' '+a.ly+')'">{{ a.deg.toFixed(1) }}°</text>
+                <text :x="a.tx" :y="a.ty" text-anchor="middle" dominant-baseline="middle" font-size="13" font-weight="700" :fill="a.color" stroke="#fff" stroke-width="3" paint-order="stroke" :transform="'rotate('+(-effectiveRotation)+' '+a.tx+' '+a.ty+')'">{{ a.deg.toFixed(1) }}°</text>
+                <g v-if="selectedArrow===i && !locked" class="arrow-del" :transform="'translate('+a.lx+' '+a.ly+') rotate('+(-effectiveRotation)+')'" @pointerdown.stop.prevent="deleteArrow(i)">
+                  <circle r="9" fill="#fff" :stroke="a.color" stroke-width="1.5"/>
+                  <path d="M-3,-3 L3,3 M3,-3 L-3,3" :stroke="a.color" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+                </g>
                 <circle :cx="a.x1" :cy="a.y1" r="5" fill="#fff" :stroke="a.color" stroke-width="1.5" @pointerdown="startArrowAdjust(i,'s',$event)"/>
                 <circle :cx="a.x2" :cy="a.y2" r="5" :fill="a.color" fill-opacity="0.45" :stroke="a.color" stroke-width="1.5" @pointerdown="startArrowAdjust(i,'e',$event)"/>
               </g>
@@ -1447,30 +1447,16 @@ createApp({
     // opening/closing it should not move or resize the canvas at all.
     const mobileToolbarH = ref(50);
     function computeStageSize(){
-      const isMobile = window.matchMedia('(max-width: 900px)').matches;
-      if(isMobile){
-        // Mobile: canvas is stacked full-width, with a fixed header above and
-        // a fixed bottom tool tray below. Both the tray and its pop-up sheet
-        // float ON TOP of the canvas (position:fixed), so only the header
-        // and the tray -- never the sheet -- ever affect the canvas box.
-        const header = document.querySelector('.panel-header');
-        const toolbar = document.querySelector('.mobile-toolbar');
-        const headerH = header ? header.offsetHeight : 60;
-        const toolbarH = toolbar ? toolbar.offsetHeight : 50;
-        mobileToolbarH.value = toolbarH;
-        const gaps = 16; // padding/gaps in main's flex column
-        stageW.value = Math.max(280, window.innerWidth - 16);
-        stageH.value = Math.max(280, window.innerHeight - headerH - toolbarH - gaps);
-      } else {
-        const sidePanel = 332, outerGap = 60;
-        const headerFooter = 90;
-        stageW.value = Math.max(320, window.innerWidth - sidePanel - outerGap);
-        stageH.value = Math.max(320, window.innerHeight - headerFooter);
-      }
+      // 畫布全版面：視窗多大就多大（控制面板／工具列浮在畫布上方）
+      const toolbar = document.querySelector('.mobile-toolbar');
+      if(toolbar && toolbar.offsetHeight) mobileToolbarH.value = toolbar.offsetHeight;
+      stageW.value = Math.max(280, window.innerWidth);
+      stageH.value = Math.max(280, window.innerHeight);
     }
 
     // -------- raw upload / crop state --------
     const rawSrc = ref('');
+    const rawFromMap = ref(false); // 來自地圖擷取：裁切後維持與地圖畫面相同的顯示比例
     const rawImgEl = ref(null);
     const rawNaturalW = ref(0), rawNaturalH = ref(0);
     const cropRect = reactive({ x:0, y:0, w:0, h:0 });
@@ -1511,7 +1497,7 @@ createApp({
       const file = e.target.files && e.target.files[0];
       if(!file) return;
       const reader = new FileReader();
-      reader.onload = (ev) => { enterCrop(ev.target.result); };
+      reader.onload = (ev) => { rawFromMap.value = false; enterCrop(ev.target.result); };
       reader.readAsDataURL(file);
     }
 
@@ -1769,6 +1755,7 @@ createApp({
         }
         if(ok.length < tiles.length){ /* 部分圖磚缺漏仍繼續，裁切時可再調整 */ }
         mapMsg.value = '';
+        rawFromMap.value = true;
         await enterCrop(dataUrl);
       }finally{ mapBusy.value = false; }
     }
@@ -1876,7 +1863,8 @@ createApp({
       rect.drawn = false; rect.x=0; rect.y=0; rect.w=0; rect.h=0;
       rotation.value = 0;
       northCorrection.value = 0;
-      houseZoom.value = 1;
+      // 地圖擷取的圖：讓最終顯示比例 = 1（與地圖上看到的像素大小一致）；其他圖維持自動適配
+      houseZoom.value = rawFromMap.value ? clamp(1/displayScale.value, 0.2, 4) : 1;
       housePan.x = 0; housePan.y = 0; panMode.value = false;
       compassEnabled.value = false;
       compassOffset.x = 0; compassOffset.y = 0;
@@ -1886,7 +1874,9 @@ createApp({
     function recrop(){ step.value = 'crop'; activeSection.value = 'crop'; }
 
     function restartAll(){
+      clearSavedState();
       step.value = 'upload';
+      mobileTool.value = null; activeSection.value = null; rawFromMap.value = false;
       rawSrc.value=''; houseSrc.value='';
       rect.drawn = false; rect.x=0; rect.y=0; rect.w=0; rect.h=0;
       rotation.value = 0; northCorrection.value = 0; locked.value = false; houseZoom.value = 1;
@@ -2161,7 +2151,12 @@ createApp({
         const x1=a.x1*s, y1=a.y1*s, x2=a.x2*s, y2=a.y2*s;
         const dx=x2-x1, dy=y2-y1, len=Math.hypot(dx,dy)||1;
         const mx=(x1+x2)/2, my=(y1+y2)/2;
-        return { x1,y1,x2,y2, lx: mx-dy/len*18, ly: my+dx/len*18, deg: arrowBearing(a), color: ARROW_COLORS[i] };
+        const ux=dx/len, uy=dy/len;
+        // 角度文字放在箭頭前方：依畫面上的方向估算文字半寬/半高，避免壓到箭頭
+        const rr=effectiveRotation.value*Math.PI/180;
+        const sx=ux*Math.cos(rr)-uy*Math.sin(rr), sy=ux*Math.sin(rr)+uy*Math.cos(rr);
+        const td = 14 + Math.abs(sx)*22 + Math.abs(sy)*8;
+        return { x1,y1,x2,y2, lx: x1-ux*44, ly: y1-uy*44, tx: x2+ux*td, ty: y2+uy*td, deg: arrowBearing(a), color: ARROW_COLORS[i] };
       });
     });
     const selectedArrowView = computed(() =>
@@ -2228,6 +2223,21 @@ createApp({
       arrowAdj = null;
       window.removeEventListener('pointermove', onArrowAdjustMove);
       window.removeEventListener('pointerup', endArrowAdjust);
+    }
+    // 點擊畫布：收合設定欄位；點到箭頭以外的地方則取消箭頭選取（刪除按鈕隨之消失）
+    function onStagePointerDown(evt){
+      const t = evt.target;
+      if(t && t.closest && t.closest('.canvas-toolbar')) return;
+      mobileTool.value = null;
+      activeSection.value = null;
+      if(!(t && t.closest && t.closest('.arrow-del, .arrow-hit, .arrow-svg circle'))){
+        selectedArrow.value = null;
+      }
+    }
+    function deleteArrow(i){
+      if(locked.value || i<0 || i>=arrows.length) return;
+      arrows.splice(i,1);
+      selectedArrow.value = null;
     }
     function clearArrows(){ arrows.splice(0); selectedArrow.value = null; }
 
@@ -2436,7 +2446,11 @@ createApp({
         ctx.beginPath(); ctx.arc(x1,y1,4.5*factor,0,Math.PI*2); ctx.fillStyle='#fff'; ctx.fill(); ctx.stroke();
         ctx.beginPath(); ctx.arc(x2,y2,4.5*factor,0,Math.PI*2); ctx.fillStyle=col; ctx.globalAlpha=0.45; ctx.fill(); ctx.globalAlpha=1; ctx.stroke();
         const len = Math.hypot(x2-x1,y2-y1)||1;
-        const lx = (x1+x2)/2-(y2-y1)/len*18*factor, ly = (y1+y2)/2+(x2-x1)/len*18*factor;
+        const ux=(x2-x1)/len, uy=(y2-y1)/len;
+        const rr=effectiveRotation.value*Math.PI/180;
+        const sx=ux*Math.cos(rr)-uy*Math.sin(rr), sy=ux*Math.sin(rr)+uy*Math.cos(rr);
+        const td=(14+Math.abs(sx)*22+Math.abs(sy)*8)*factor;
+        const lx = x2+ux*td, ly = y2+uy*td;
         ctx.save();
         ctx.translate(lx,ly); ctx.rotate(-effectiveRotation.value*Math.PI/180);
         ctx.font = '700 '+(13*factor)+'px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
@@ -2584,11 +2598,136 @@ createApp({
     watch(mapLayer, (v) => { if(leafletTiles) leafletTiles.setUrl(NLSC_URL(v)); });
     watch(step, (v) => {
       if(v === 'map'){ nextTick(initMap); } else { destroyMap(); }
-      arrows.splice(0); selectedArrow.value = null; arrowMode.value = false; gridMode.value = false;
+      if(!restoringState){ arrows.splice(0); }
+      selectedArrow.value = null; arrowMode.value = false; gridMode.value = false;
       if(v === 'crop'){ mobileTool.value = 'crop'; }
       if(v === 'work'){ activeSection.value = 'outline'; mobileTool.value = 'outline'; }
       nextTick(computeStageSize);
     });
+
+
+    // -------- 自動儲存（IndexedDB）：每個步驟的進度都會記錄，重新整理後自動還原；按「重新上傳」才會清除 --------
+    let restoringState = false, stateReady = false, saveTimer = null;
+    const IDB_NAME = 'fs-compass-autosave', IDB_STORE = 'kv';
+    function idbOpen(){
+      return new Promise((resolve, reject) => {
+        if(!window.indexedDB){ reject(new Error('no idb')); return; }
+        const req = indexedDB.open(IDB_NAME, 1);
+        req.onupgradeneeded = () => req.result.createObjectStore(IDB_STORE);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    }
+    async function idbRun(mode, fn){
+      const db = await idbOpen();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(IDB_STORE, mode);
+        const st = tx.objectStore(IDB_STORE);
+        const out = fn(st);
+        tx.oncomplete = () => { db.close(); resolve(out && out.result !== undefined ? out.result : undefined); };
+        tx.onerror = tx.onabort = () => { db.close(); reject(tx.error); };
+      });
+    }
+    async function idbGetMany(keys){
+      const db = await idbOpen();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(IDB_STORE, 'readonly');
+        const st = tx.objectStore(IDB_STORE);
+        const res = {};
+        keys.forEach(k => { const r = st.get(k); r.onsuccess = () => { res[k] = r.result; }; });
+        tx.oncomplete = () => { db.close(); resolve(res); };
+        tx.onerror = tx.onabort = () => { db.close(); reject(tx.error); };
+      });
+    }
+    function idbPut(key, val){
+      if(!stateReady) return;
+      const job = (val === '' || val == null) ? idbRun('readwrite', st => st.delete(key)) : idbRun('readwrite', st => st.put(val, key));
+      job.catch(() => {});
+    }
+    function clearSavedState(){
+      clearTimeout(saveTimer); saveTimer = null;
+      idbRun('readwrite', st => st.clear()).catch(() => {});
+    }
+    const persistSnapshot = computed(() => ({
+      step: step.value,
+      rawFromMap: rawFromMap.value,
+      cropRect: { x:cropRect.x, y:cropRect.y, w:cropRect.w, h:cropRect.h },
+      rect: { x:rect.x, y:rect.y, w:rect.w, h:rect.h, drawn:rect.drawn, angle:rect.angle },
+      rotation: rotation.value, northCorrection: northCorrection.value,
+      locked: locked.value, houseZoom: houseZoom.value,
+      housePan: { x:housePan.x, y:housePan.y },
+      arrows: arrows.map(a => ({ x1:a.x1, y1:a.y1, x2:a.x2, y2:a.y2 })),
+      compass: { enabled:compassEnabled.value, scale:compassScale.value, opacity:compassOpacity.value, x:compassOffset.x, y:compassOffset.y },
+      fs: { sitting:fsSittingKey.value, period:fsPeriodStar.value, year:fsYear.value },
+      decl: { query:declQuery.value, model:declModel.value, lat:declSelectedLat.value, lon:declSelectedLon.value, result: declResult.value },
+      mapLayer: mapLayer.value
+    }));
+    function saveStateNow(){
+      saveTimer = null;
+      if(!stateReady || restoringState) return;
+      if(step.value !== 'crop' && step.value !== 'work') return; // 上傳頁／地圖頁沒有進度可存
+      let snap;
+      try{ snap = JSON.parse(JSON.stringify(persistSnapshot.value)); }catch(e){ return; }
+      idbPut('state', snap);
+    }
+    function scheduleSave(){
+      if(!stateReady || restoringState) return;
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(saveStateNow, 400);
+    }
+    watch(persistSnapshot, scheduleSave, { deep:true });
+    watch(rawSrc, v => { if(step.value==='crop' || step.value==='work' || !v) idbPut('rawSrc', v); });
+    watch(houseSrc, v => idbPut('houseSrc', v));
+    watch(step, v => {
+      if(v === 'crop' || v === 'work'){
+        // 進入新階段時，確保圖片也已存入（例如剛擷取地圖或剛上傳）
+        if(rawSrc.value) idbPut('rawSrc', rawSrc.value);
+        if(houseSrc.value) idbPut('houseSrc', houseSrc.value);
+        scheduleSave();
+      }
+    });
+    function flushSave(){ if(saveTimer){ clearTimeout(saveTimer); saveStateNow(); } }
+    window.addEventListener('pagehide', flushSave);
+    document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'hidden') flushSave(); });
+
+    async function restoreSavedState(){
+      let saved;
+      try{ saved = await idbGetMany(['state','rawSrc','houseSrc']); }catch(e){ return; }
+      const st = saved && saved.state;
+      if(!st || !saved.rawSrc || (st.step !== 'crop' && st.step !== 'work')) return;
+      if(st.step === 'work' && !saved.houseSrc) return;
+      restoringState = true;
+      try{
+        rawFromMap.value = !!st.rawFromMap;
+        rawSrc.value = saved.rawSrc;
+        const rimg = await loadImageEl(saved.rawSrc);
+        rawImgEl.value = rimg; rawNaturalW.value = rimg.naturalWidth; rawNaturalH.value = rimg.naturalHeight;
+        Object.assign(cropRect, st.cropRect || {});
+        if(st.step === 'work'){
+          houseSrc.value = saved.houseSrc;
+          const himg = await loadImageEl(saved.houseSrc);
+          houseImgEl.value = himg; naturalW.value = himg.naturalWidth; naturalH.value = himg.naturalHeight;
+          Object.assign(rect, st.rect || {});
+          rotation.value = st.rotation || 0; northCorrection.value = st.northCorrection || 0;
+          locked.value = !!st.locked; houseZoom.value = st.houseZoom || 1;
+          Object.assign(housePan, st.housePan || {});
+          arrows.splice(0, arrows.length, ...(st.arrows || []));
+          const c = st.compass || {};
+          compassEnabled.value = !!c.enabled; compassScale.value = c.scale ?? 1; compassOpacity.value = c.opacity ?? 0.85;
+          compassOffset.x = c.x || 0; compassOffset.y = c.y || 0;
+        }
+        if(st.fs){ fsSittingKey.value = st.fs.sitting || fsSittingKey.value; fsPeriodStar.value = st.fs.period || fsPeriodStar.value; fsYear.value = st.fs.year || fsYear.value; }
+        if(st.decl){
+          declQuery.value = st.decl.query || ''; declModel.value = st.decl.model || 'WMM';
+          declSelectedLat.value = st.decl.lat ?? null; declSelectedLon.value = st.decl.lon ?? null;
+          declResult.value = st.decl.result || null;
+        }
+        if(st.mapLayer) mapLayer.value = st.mapLayer;
+        step.value = st.step;
+        await nextTick(); await nextTick();
+      }catch(e){ /* 還原失敗就當作全新開始 */ }
+      finally{ restoringState = false; }
+    }
 
     onMounted(async () => {
       computeStageSize();
@@ -2596,6 +2735,9 @@ createApp({
       window.addEventListener('resize', computeStageSize);
       window.addEventListener('orientationchange', () => nextTick(computeStageSize));
       compassImgEl.value = await loadImageEl(COMPASS_DATA_URI);
+      await restoreSavedState();
+      stateReady = true;
+      nextTick(computeStageSize);
     });
 
     return {
@@ -2605,7 +2747,7 @@ createApp({
       houseSrc, naturalW, naturalH, rect, hasRect, northCorrection, clampNorthCorrection, addNorthCorrection, rotation, clampRotation, locked, houseZoom, housePan, panMode, zoomIn, zoomOut, resetZoomPan, imgWrapperEl,
       displayScale, finalScale, centerPoint, gridSegments, centerCrossSegments, wrapperStyle, rectBoxStyle,
       onWrapperMouseDown, onRectAreaMouseDown, resetRect,
-      snapGridToArrow, rectGroupTransform, panShake, panWarn, rotateWarn, openRotateTool, gridMode, toggleArrowMode, toggleGridMode, arrowMode, arrows, arrowViews, selectedArrow, selectedArrowView, startArrowAdjust, clearArrows,
+      snapGridToArrow, rectGroupTransform, panShake, panWarn, rotateWarn, openRotateTool, gridMode, toggleArrowMode, toggleGridMode, arrowMode, arrows, arrowViews, selectedArrow, selectedArrowView, startArrowAdjust, clearArrows, deleteArrow, onStagePointerDown, effectiveRotation,
       compassSrc, compassEnabled, onCompassToggle, compassScale, compassOpacity, compassOffset, compassStyle, startCompassDrag,
       exportComposite,
       // 六、紫白飛星
